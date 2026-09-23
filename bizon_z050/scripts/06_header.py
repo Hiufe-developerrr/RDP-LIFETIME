@@ -158,17 +158,30 @@ make_obj("augerMesh", bm, [RED, STEEL, DARK], C, TAG, origin=tuple(AUG), parent=
 # ------------------------------------------------------------ reel + arms
 arms = empty("reelArms", tuple(ARM_PIV), C, TAG, parent=root, size=0.35)
 bm = bmesh.new()
-for s in (1, -1):
-    x = s * (EP + 0.075)
-    prof = [(-0.03, -0.045), (0.03, -0.045), (0.03, 0.045), (-0.03, 0.045)]
-    sweep(bm, [(x, ARM_PIV.y, ARM_PIV.z), (x, REEL.y - 0.02, REEL.z + 0.06)], prof, mi=0, up=(0, 0, 1))
+for s_ in (1, -1):
+    x = s_ * (EP + 0.075)
+    a0 = Vector((x, ARM_PIV.y, ARM_PIV.z))
+    a1 = Vector((x, REEL.y - 0.02, REEL.z + 0.06))
+    b0 = a0 + Vector((0, -0.04, -0.16))
+    b1 = a1 + Vector((0, 0.10, -0.04))
+    sq = [(-0.022, -0.022), (0.022, -0.022), (0.022, 0.022), (-0.022, 0.022)]
+    sweep(bm, [a0, a1], sq, mi=0, up=(1, 0, 0))
+    sweep(bm, [b0, b1], [(u * 0.8, v * 0.8) for (u, v) in sq], mi=0, up=(1, 0, 0))
+    for k in range(5):
+        t0, t1 = k / 5, (k + 1) / 5
+        p = a0.lerp(a1, t0) if k % 2 == 0 else b0.lerp(b1, t0)
+        q = b0.lerp(b1, t1) if k % 2 == 0 else a0.lerp(a1, t1)
+        tube(bm, [p, q], 0.011, 8, mi=0)
+    tube(bm, [a0, b0], 0.014, 8, mi=0)
     cyl(bm, (x - 0.05, ARM_PIV.y, ARM_PIV.z), (x + 0.05, ARM_PIV.y, ARM_PIV.z), 0.04, 14, 1)
-    # bearing housing at the reel shaft
-    cyl(bm, (x - 0.05, REEL.y, REEL.z), (x + 0.05, REEL.y, REEL.z), 0.07, 18, 1)
-    # truss brace down to the lift cylinder lug
+    flange_bearing(bm, (x + s_ * 0.022, REEL.y, REEL.z), (s_, 0, 0), 0.06, 1, 2, bolts=4)
+    for t in (0.3, 0.62):                                          # adjustment holes plate
+        c_ = a0.lerp(a1, t) + Vector((s_ * 0.024, 0, 0))
+        nut(bm, c_, (s_, 0, 0), af=0.016, h=0.007, mi=2)
     t_top = Vector((x, ARM_PIV.y + (REEL.y - ARM_PIV.y) * 0.55, ARM_PIV.z + (REEL.z - ARM_PIV.z) * 0.55))
-    tube(bm, [t_top, t_top + Vector((0, 0.10, -0.22))], 0.022, 8, mi=0)
-make_obj("reelArmsMesh", bm, [RED, DARK], C, TAG, origin=tuple(ARM_PIV), parent=arms, bevel=0.004)
+    tube(bm, [t_top, t_top + Vector((0, 0.10, -0.22))], 0.02, 8, mi=0)
+ARM_MESH = make_obj("reelArmsMesh", bm, [RED, DARK, "Z050_zinc"], C, TAG, origin=tuple(ARM_PIV), parent=arms,
+                    bevel=0.003)
 
 # reel lift cylinders (header -> arms), static approximation
 bm = bmesh.new()
@@ -214,38 +227,116 @@ for k in range(n_bats):
         p1 = p0 + d * 0.06 + tangent * 0.01
         p2 = p0 + d * 0.17 - tangent * 0.035
         tube(bm, [p0, p1, p2], 0.0045, 6, mi=2)
+        coil = [p0 + d * 0.012 + (Vector((1, 0, 0)) * 0.0 + d * cos(t) * 0.011 + tangent * sin(t) * 0.011)
+                for t in [2 * pi * j / 6 for j in range(6)]]
+        sweep(bm, coil, circle2d(0.0032, 4), closed=True, mi=2)
+# eccentric spider (keeps the tines pointing down) on the right end, with cranks
+ecc = Vector((0.0, 0.07, 0.0))
+xe = -2.10
+cyl(bm, (xe - 0.03, REEL.y + ecc.y, REEL.z + ecc.z), (xe + 0.03, REEL.y + ecc.y, REEL.z + ecc.z), 0.075, 20, 0)
+for k in range(n_bats):
+    a = 2 * pi * k / n_bats
+    d = Vector((0, cos(a), sin(a)))
+    p0 = REEL + ecc + Vector((xe, 0, 0)) + d * 0.07
+    p1 = REEL + ecc + Vector((xe, 0, 0)) + d * (REEL_R - 0.01)
+    sweep(bm, [p0, p1], [(0.025, -0.006), (0.025, 0.006), (-0.025, 0.006), (-0.025, -0.006)], mi=0, up=(1, 0, 0))
+    bc = REEL + d * REEL_R
+    crank0 = Vector((-2.075, bc.y, bc.z))
+    crank1 = crank0 + ecc + Vector((-0.02, 0, 0))
+    tube(bm, [crank0, crank1], 0.009, 6, mi=0)
+    cyl(bm, crank1 - Vector((0.012, 0, 0)), crank1 + Vector((0.012, 0, 0)), 0.02, 10, 2)
 make_obj("reelMesh", bm, [RED, GRAY, STEEL], C, TAG, origin=tuple(REEL), parent=reel_root)
 
 # -------------------------------------------------------- header drives (L)
-
-
-def pulley_x(bm, c, r, x0, x1, mi=0):
-    xm = (x0 + x1) / 2
-    w = x1 - x0
-    revolve(bm, [(0.0, x0), (r * 0.30, x0), (r * 0.30, x0 + 0.005), (r * 0.85, x0 + 0.005), (r, x0),
-                 (r * 0.88, xm), (r, x1), (r * 0.85, x1 - 0.005), (r * 0.30, x1 - 0.005), (r * 0.30, x1),
-                 (0.0, x1)], 36, center=(0, c[0], c[1]), axis='X', mi=mi)
-    cyl(bm, (x0 - 0.015, c[0], c[1]), (x1 + 0.015, c[0], c[1]), max(0.03, r * 0.2), 14, 1)
-
-
+HIN = (-1.72, 1.10)                  # cross shaft behind the back wall (input from the feeder belt)
+BIG = (-2.25, 0.88)                  # countershaft on the left end plate
+XP, XC, XR = EP + 0.165, EP + 0.085, EP + 0.225
 bm = bmesh.new()
-XD0, XD1 = EP + 0.14, EP + 0.19
-big = (-2.25, 0.88, 0.28)
-pulley_x(bm, big[:2], big[2], XD0, XD1)
-small_in = (-1.98, 1.02, 0.09)
-pulley_x(bm, small_in[:2], small_in[2], XD0, XD1)
-pts = belt_path([(y, z, r * 0.95) for (y, z, r) in (big, small_in)], 10)
-sweep(bm, [(XD0 + 0.025, y, z) for (y, z) in pts[:-1]],
-      [(-0.011, -0.006), (0.011, -0.006), (0.011, 0.006), (-0.011, 0.006)], closed=True, mi=2, up=(1, 0, 0))
-# auger chain drive: sprocket on auger shaft + chain loop to the big pulley shaft
-spr = (AUG.y, AUG.z, 0.13)
-pulley_x(bm, spr[:2], spr[2], EP + 0.07, EP + 0.09, mi=1)
-pulley_x(bm, (big[0], big[1]), 0.08, EP + 0.07, EP + 0.09, mi=1)
-cpts = belt_path([(spr[0], spr[1], spr[2]), (big[0], big[1], 0.08)], 12)
-chain_prof = [(-0.006, -0.012), (0.006, -0.012), (0.006, 0.012), (-0.006, 0.012)]
-sweep(bm, [(EP + 0.08, y, z) for (y, z) in cpts[:-1]], chain_prof, closed=True, mi=1, up=(1, 0, 0))
-# drive shield plate behind the pulleys
-prism(bm, [(-2.58, 0.60), (-2.00, 0.66), (-1.90, 1.14), (-2.20, 1.22), (-2.56, 1.12)], 'X', EP + 0.105, EP + 0.115, 0)
-make_obj("z050h_drives", bm, [RED, STEEL, RUB], C, TAG, parent=root)
+cyl(bm, (0.66, HIN[0], HIN[1]), (XP + 0.04, HIN[0], HIN[1]), 0.025, 12, 1)
+spoked_pulley(bm, HIN, 0.14, 0.72, 0.035, 1, 5, 0, 1)
+for x in (0.86, 1.45, EP - 0.02):
+    flange_bearing(bm, (x, HIN[0], HIN[1]), (-1 if x < 2 else 1, 0, 0), 0.05, 3, 1)
+    box(bm, (x - 0.012, HIN[0] - 0.05, HIN[1] - 0.06), (x + 0.012, HIN[0] + 0.03, HIN[1] + 0.06), 3)
+spoked_pulley(bm, HIN, 0.09, XP, 0.035, 1, 0, 0, 1)
+spoked_pulley(bm, BIG, 0.28, XP, 0.035, 1, 6, 0, 1)
+pts = belt_path([(HIN[0], HIN[1], 0.09 * 0.93), (BIG[0], BIG[1], 0.28 * 0.93)], 12)
+sweep(bm, [(XP, y, z) for (y, z) in pts[:-1]], [(-0.006, -0.0065), (0.006, -0.0065), (0.006, 0.0065), (-0.006, 0.0065)],
+      closed=True, mi=2, up=(1, 0, 0))
+cyl(bm, (EP, BIG[0], BIG[1]), (XR + 0.03, BIG[0], BIG[1]), 0.028, 12, 1)
+flange_bearing(bm, (EP + 0.012, BIG[0], BIG[1]), (1, 0, 0), 0.06, 3, 1, bolts=4)
+# auger chain (countershaft -> auger) with a spring loaded idler sprocket
+ra = sprocket(bm, BIG, XC - 0.004, XC + 0.004, 25, mi=4, hub_mi=1)
+rb = 0.01905 / (2 * sin(pi / 34))
+ID = (-2.05, 0.62)
+ri = sprocket(bm, ID, XC - 0.004, XC + 0.004, 11, mi=4, hub_mi=1)
+roller_chain(bm, belt_path([(BIG[0], BIG[1], ra), (AUG.y, AUG.z, rb), (ID[0], ID[1], ri)], 14), XC, mi=4)
+tube(bm, [(XC + 0.02, ID[0], ID[1]), (XC + 0.02, -1.99, 0.74)], 0.01, 8, mi=1)
+spring(bm, (XC + 0.02, -1.99, 0.74), (XC + 0.02, -1.96, 0.92), 0.012, 0.0026, 10, mi=1)
+# reel drive: countershaft -> arm pivot shaft
+rr1 = sprocket(bm, BIG, XR - 0.004, XR + 0.004, 13, mi=4, hub_mi=1)
+PV = (ARM_PIV.y, ARM_PIV.z)
+rr2 = sprocket(bm, PV, XR - 0.004, XR + 0.004, 21, mi=4, hub_mi=1)
+roller_chain(bm, belt_path([(BIG[0], BIG[1], rr1), (PV[0], PV[1], rr2)], 14), XR, mi=4)
+cyl(bm, (EP + 0.03, PV[0], PV[1]), (XR + 0.03, PV[0], PV[1]), 0.022, 12, 1)
+# knife drive: pulley on the wobble box, belt from the auger shaft pulley
+WB = (-2.70, 0.30)
+XK = EP + 0.265
+spoked_pulley(bm, WB, 0.10, XK, 0.03, 1, 0, 0, 1)
+cyl(bm, (EP + 0.20, WB[0], WB[1]), (XK + 0.02, WB[0], WB[1]), 0.02, 10, 1)
+pts = belt_path([(AUG.y, AUG.z, 0.07 * 0.93), (WB[0], WB[1], 0.10 * 0.93)], 12)
+sweep(bm, [(XK, y, z) for (y, z) in pts[:-1]], [(-0.005, -0.006), (0.005, -0.006), (0.005, 0.006), (-0.005, 0.006)],
+      closed=True, mi=2, up=(1, 0, 0))
+# drive shield behind the pulleys
+prism(bm, [(-2.58, 0.60), (-1.90, 0.66), (-1.66, 1.10), (-1.80, 1.26), (-2.20, 1.24), (-2.56, 1.12)], 'X',
+      EP + 0.125, EP + 0.131, 0)
+for (y, z) in ((-2.50, 0.68), (-1.95, 0.72), (-1.78, 1.18), (-2.45, 1.14)):
+    nut(bm, (EP + 0.131, y, z), (1, 0, 0), af=0.014, h=0.006, mi=1, washer=False)
+make_obj("z050h_drives", bm, [RED, STEEL, "Z050_belt", DARK, "Z050_chain"], C, TAG, parent=root)
+
+# rotating parts on the auger shaft and the reel shaft (join into those meshes)
+bm = bmesh.new()
+sprocket(bm, (AUG.y, AUG.z), XC - 0.004, XC + 0.004, 34, mi=1, hub_mi=0)
+spoked_pulley(bm, (AUG.y, AUG.z), 0.07, XK, 0.03, 1, 0, 0, 0)
+cyl(bm, (EP + 0.06, AUG.y, AUG.z), (XK + 0.02, AUG.y, AUG.z), 0.03, 12, 0)
+spoked_pulley(bm, (AUG.y, AUG.z), 0.12, EP + 0.03, 0.02, 1, 0, 0, 0)          # slip clutch plate
+for k in range(6):
+    a = 2 * pi * k / 6
+    nut(bm, (EP + 0.04, AUG.y + 0.08 * cos(a), AUG.z + 0.08 * sin(a)), (1, 0, 0), af=0.013, h=0.006, mi=0, stud=True)
+ob = make_obj("z050h_augerDrive", bm, [STEEL, "Z050_chain"], C, TAG)
+ob["attach"] = "augerMesh"
+bm = bmesh.new()
+XRC = EP + 0.13
+r_a = sprocket(bm, PV, XRC - 0.004, XRC + 0.004, 15, mi=1, hub_mi=0)
+r_b = 0.01905 / (2 * sin(pi / 30))
+roller_chain(bm, belt_path([(PV[0], PV[1], r_a), (REEL.y, REEL.z, r_b)], 14), XRC, mi=1)
+guard = [(PV[0] + 0.07, PV[1] + 0.02), (REEL.y - 0.05, REEL.z + 0.14), (REEL.y - 0.12, REEL.z + 0.06),
+         (PV[0] + 0.02, PV[1] - 0.07)]
+prism(bm, guard, 'X', XRC + 0.02, XRC + 0.025, 2)
+ob = make_obj("z050h_reelChain", bm, [STEEL, "Z050_chain", RED], C, TAG)
+ob["attach"] = "reelArmsMesh"
+bm = bmesh.new()
+sprocket(bm, (REEL.y, REEL.z), XRC - 0.004, XRC + 0.004, 30, mi=1, hub_mi=0)
+cyl(bm, (EP + 0.05, REEL.y, REEL.z), (XRC + 0.02, REEL.y, REEL.z), 0.03, 12, 0)
+ob = make_obj("z050h_reelSprocket", bm, [STEEL, "Z050_chain"], C, TAG)
+ob["attach"] = "reelMesh"
+
+# hoses from the reel cylinders to the quick couplers on the feeder house
+bm = bmesh.new()
+hose(bm, [(EP + 0.075, -2.10, 0.70), (EP + 0.075, -1.80, 0.92), (EP + 0.03, -1.70, 1.37), (-0.80, -1.70, 1.37),
+          (-0.80, -1.64, 1.26), (-0.787, -1.635, 1.20)], 0.0105, 0, 1, 0.1)
+hose(bm, [(-EP - 0.075, -2.10, 0.70), (-EP - 0.075, -1.80, 0.92), (-EP - 0.03, -1.74, 1.00), (-0.86, -1.74, 1.00),
+          (-0.82, -1.60, 1.14), (-0.787, -1.565, 1.20)], 0.0105, 0, 1, 0.1)
+for x in (-1.9, -1.3, 1.3, 1.9):
+    for z in (1.00, 1.37):
+        if (x < 0 and z < 1.2) or (x > 0 and z > 1.2):
+            box_c(bm, (x, -1.70 if z > 1.2 else -1.74, z), (0.02, 0.035, 0.035), 1)
+# rivets along the top-back beam and the end plate edges
+for z in (1.26, 1.32):
+    fasteners(bm, (-2.10, -1.84, z), (2.10, -1.84, z), (0, -1, 0), 0.15, 'rivet', 2)
+for s_ in (1, -1):
+    x = s_ * (EP + 0.012)
+    fasteners(bm, (x, -2.96, 0.36), (x, -2.36, 1.14), (s_, 0, 0), 0.1, 'rivet', 2)
+    fasteners(bm, (x, -2.28, 0.10), (x, -1.99, 0.40), (s_, 0, 0), 0.1, 'rivet', 2)
+make_obj("z050h_hoses", bm, ["Z050_hose", "Z050_zinc", RED], C, TAG, parent=root)
 
 print("header objects:", sorted(o.name for o in D.objects if o.get("z050_part") == TAG))

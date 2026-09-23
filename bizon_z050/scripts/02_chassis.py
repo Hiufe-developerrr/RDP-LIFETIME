@@ -103,28 +103,35 @@ make_obj("z050_radiatorGrille", bm, [RED, DARK], C, TAG, bevel=0.003)
 
 # ----------------------------------------------------- operator platform frame
 bm = bmesh.new()
-# checker-plate floor
-box(bm, (-PLAT_HW, PLAT_Y0, PLAT_Z - 0.05), (PLAT_HW, PLAT_Y1, PLAT_Z), 0)
-for i in range(10):
-    for j in range(7):
-        x = -PLAT_HW + 0.12 + j * 0.24 + (0.06 if i % 2 else 0.0)
-        y = PLAT_Y0 + 0.10 + i * 0.135
-        if x < PLAT_HW - 0.08:
-            vs, _ = box_c(bm, (x, y, PLAT_Z + 0.003), (0.07, 0.016, 0.006), 0)
-            rotate_verts(bm, vs, radians(45 if (i + j) % 2 else -45), 'Z', (x, y, 0))
+# steel floor plate (own material: paint worn through by boots)
+box(bm, (-PLAT_HW, PLAT_Y0, PLAT_Z - 0.05), (PLAT_HW, PLAT_Y1, PLAT_Z), 3)
+for x in (-PLAT_HW + 0.045, PLAT_HW - 0.045):
+    fasteners(bm, (x, PLAT_Y0 + 0.07, PLAT_Z), (x, PLAT_Y1 - 0.07, PLAT_Z), (0, 0, 1), 0.19, 'rivet', 3,
+              r=0.0085, h=0.0022)
+for y in (PLAT_Y0 + 0.045, PLAT_Y0 + 0.62, PLAT_Y1 - 0.045):
+    fasteners(bm, (-PLAT_HW + 0.14, y, PLAT_Z), (PLAT_HW - 0.14, y, PLAT_Z), (0, 0, 1), 0.21, 'rivet', 3,
+              r=0.0085, h=0.0022)
+cyl(bm, (0.52, -1.02, PLAT_Z - 0.052), (0.52, -1.02, PLAT_Z + 0.001), 0.018, 12, 1)       # drain hole plug
 # longitudinal beams + diagonal struts down to the body front
 for s in (1, -1):
     x = s * 0.78
     box(bm, (x - 0.04, PLAT_Y0 + 0.05, PLAT_Z - 0.17), (x + 0.04, -0.60, PLAT_Z - 0.05), 1)
     tube(bm, [(x, PLAT_Y0 + 0.35, PLAT_Z - 0.16), (x * 0.95, -0.64, 1.30)], 0.035, 10, mi=1)
-# front panel (cream beam) that carries the headlights
-box(bm, (-0.93, PLAT_Y0 - 0.10, 1.83), (0.93, PLAT_Y0 + 0.02, PLAT_Z + 0.05), 2)
-box(bm, (-0.95, PLAT_Y0 - 0.12, PLAT_Z + 0.02), (0.95, PLAT_Y0 + 0.02, PLAT_Z + 0.07), 2)
+    for (y, z) in ((PLAT_Y0 + 0.35, PLAT_Z - 0.16), (-0.64, 1.30)):
+        box(bm, (x * (0.95 if z < 2 else 1.0) - 0.05, y - 0.04, z - 0.05), (x * (0.95 if z < 2 else 1.0) + 0.05, y + 0.04, z + 0.02), 1)
+# red front wall under the railing (carries the headlights), rolled top edge, bottom flange
+box(bm, (-0.93, PLAT_Y0 - 0.11, 1.78), (0.93, PLAT_Y0 - 0.01, PLAT_Z + 0.06), 0)
+cyl(bm, (-0.935, PLAT_Y0 - 0.06, PLAT_Z + 0.06), (0.935, PLAT_Y0 - 0.06, PLAT_Z + 0.06), 0.022, 12, 0)
+box(bm, (-0.94, PLAT_Y0 - 0.14, 1.76), (0.94, PLAT_Y0 - 0.01, 1.79), 0)
+for x in (-0.62, 0.0, 0.62):
+    bead(bm, (x - 0.22, PLAT_Y0 - 0.11, 1.90), (x + 0.22, PLAT_Y0 - 0.11, 1.90), (0, -1, 0), 0.04, 0.006, 0)
+fasteners(bm, (-0.90, PLAT_Y0 - 0.14, 1.775), (0.90, PLAT_Y0 - 0.14, 1.775), (0, -1, 0), 0.15, 'bolt', 4,
+          af=0.015, h=0.006, washer=False)
 # toe board along the platform sides
 for s in (1, -1):
     a, b = s * PLAT_HW, s * (PLAT_HW + 0.02)
     box(bm, (min(a, b), PLAT_Y0, PLAT_Z - 0.12), (max(a, b), PLAT_Y1, PLAT_Z + 0.06), 0)
-make_obj("z050_platform", bm, [RED, DARK, CREAM], C, TAG, bevel=0.008)
+make_obj("z050_platform", bm, [RED, DARK, CREAM, "Z050_paint_red_floor", "Z050_zinc"], C, TAG, bevel=0.006)
 
 # --------------------------------------------------- feeder house (movable)
 bm = bmesh.new()
@@ -143,7 +150,8 @@ prism(bm, [(-1.62, 1.12), (-1.70, 1.12), (-1.90, 0.32), (-1.82, 0.32)], 'X', -0.
 # lift cylinder lugs under the feeder
 for s in (1, -1):
     box(bm, (s * 0.42 - 0.03, -1.30, 0.58), (s * 0.42 + 0.03, -1.12, 0.66), 1)
-make_obj("feederHouse", bm, [RED, DARK], C, TAG, origin=FEEDER_PIVOT, bevel=0.012)
+fh_ob = make_obj("feederHouse", bm, [RED, DARK], C, TAG, origin=FEEDER_PIVOT, bevel=0.012)
+fh_ob["keep"] = True
 
 # header lift cylinders (from front axle to feeder house)
 bm = bmesh.new()
@@ -154,7 +162,7 @@ for s in (1, -1):
     cyl(bm, p0, mid, 0.045, 14, 0)
     cyl(bm, mid, p1, 0.022, 10, 1)
     cyl(bm, (s * 0.42 - 0.04, p0.y, p0.z), (s * 0.42 + 0.04, p0.y, p0.z), 0.05, 12, 0)
-make_obj("z050_liftCylinders", bm, [DARK, "Z050_chrome"], C, TAG)
+make_obj("z050_liftCylinders", bm, [DARK, "Z050_chrome"], C, TAG)["keep"] = True
 
 # ------------------------------------------ front drive axle and final drives
 bm = bmesh.new()
@@ -179,7 +187,7 @@ box(bm, (-0.16, RW_Y - 0.10, 0.54), (0.16, RW_Y + 0.10, 0.62), 0)          # piv
 cyl(bm, (0, RW_Y - 0.20, 0.585), (0, RW_Y + 0.20, 0.585), 0.045, 14, 1)     # pendulum pin
 for s in (1, -1):
     cyl(bm, (s * 0.78, RW_Y, 0.34), (s * 0.78, RW_Y, 0.60), 0.052, 16, 0)   # kingpin boss
-make_obj("rearAxle", bm, [DARK, STEEL], C, TAG, origin=rear_pivot, bevel=0.008)
+make_obj("rearAxle", bm, [DARK, STEEL], C, TAG, origin=rear_pivot, bevel=0.008)["keep"] = True
 
 # pendulum bracket on the body
 bm = bmesh.new()
