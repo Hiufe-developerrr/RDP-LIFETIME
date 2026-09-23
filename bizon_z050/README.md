@@ -7,6 +7,11 @@ materiały, UV, wypalanie tekstur i eksport też wykonują te skrypty.
 
 ![Bizon Z050 Super – widok z przodu z lewej](renders/front_left.jpg)
 
+| | |
+| --- | --- |
+| ![Bok](renders/side_left.jpg) | ![Tył z prawej](renders/rear_right.jpg) |
+| ![Stanowisko operatora](renders/operator.jpg) | ![Heder 4,20 m](renders/header.jpg) |
+
 ## Zawartość
 
 | Ścieżka | Opis |
