@@ -16,7 +16,7 @@ materiały, UV, wypalanie tekstur i eksport też wykonują te skrypty.
 
 | Ścieżka | Opis |
 | --- | --- |
-| `blend/bizon_z050_super.blend` | Scena Blendera 4.2 LTS: kombajn, heder, kolizje, słońce, niebo i kamery |
+| `blend/bizon_z050_super.blend` | Scena Blendera (zapisana w 4.2 LTS, działa też w 5.2): kombajn, heder, kolizje, słońce, niebo i kamery. **Tekstury są wbudowane** (2048 px), więc wystarczy pobrać sam ten plik |
 | `export/bizon_z050_super_fs25.fbx` | Eksport z wypalonymi materiałami atlasowymi (oś Y do góry, przód +Z jak w GIANTS) |
 | `textures/` | Wypalone atlasy `*_diffuse.png`, `*_normal.png`, `*_specular.png` |
 | `renders/` | Rendery Cycles |
@@ -97,10 +97,28 @@ Skrypt `fs25_switch_materials.py` w edytorze tekstu przełącza materiały:
 `MODE = "PROCEDURAL"` przywraca materiały proceduralne (źródło do ponownego wypalenia),
 `MODE = "BAKED"` wraca do atlasów.
 
+Tekstury atlasów są spakowane w pliku `.blend` w rozdzielczości 2048 px (opony 1024 px). Pełne
+4096 px mieszczą się tylko w folderze `textures/`, bo spakowane przekroczyłyby limit 100 MB na plik
+w GitHubie. Żeby przełączyć plik na pełną rozdzielczość, pobierz całe repozytorium (**Code → Download ZIP**),
+otwórz `bizon_z050/blend/bizon_z050_super.blend` i wybierz **File → External Data → Unpack Resources →
+Use files in original location**. Blender użyje wtedy plików 4096 z `textures/` i ich nie nadpisze.
+
+### Model jest różowy?
+
+Różowy (magenta) kolor w Blenderze oznacza, że materiał nie może znaleźć pliku tekstury. Starsze
+wersje pliku wczytywały tekstury z folderu `../textures/` obok siebie, więc po pobraniu samego
+`.blend` (np. do `Pobrane`) model był różowy. Obecna wersja ma tekstury wbudowane i działa po
+pobraniu samego pliku. Jeśli masz starszą kopię, wybierz **File → External Data → Find Missing Files**
+i wskaż folder `textures/`. To samo dotyczy pliku FBX: szuka tekstur w `../textures/`.
+
+![Blender 5.2.1: sam plik .blend w pustym folderze, Material Preview](renders/blender52_standalone_material_preview.jpg)
+
 ### Eksport do i3d
 
 1. Otwórz `blend/bizon_z050_super.blend` w Blenderze **4.2 lub 4.3** (tych wersji wymaga GIANTS I3D Exporter v10).
-2. Siatki mają już wypalone materiały atlasowe (`MODE = "BAKED"`).
+2. Siatki mają już wypalone materiały atlasowe (`MODE = "BAKED"`). Przed eksportem przełącz tekstury
+   na pliki z `textures/` (patrz wyżej: *Use files in original location*), żeby i3d wskazywał na pełną
+   rozdzielczość.
 3. Wyeksportuj kolekcje `Z050_combine` i `Z050_header420` exporterem GIANTS. Następnie przypisz
    `vehicleShader.xml`, oznacz kolizje i ustaw wheels/attacherJoints w XML pojazdu. Heder to w FS osobny pojazd (cutter).
 
@@ -140,6 +158,7 @@ done
 $RUN --code 08_render_setup.py
 $RUN --code 09_bake.py     # wypalanie w tle (ok. 25 min), postęp: textures/bake_status.txt
 $RUN --code 10_export.py   # FBX + zapis .blend
+$RUN --code 11_pack.py     # wbudowanie tekstur 2048 px w .blend (plik działa bez folderu textures/)
 ```
 
 Skrypty zapisują pliki w `/tmp/hoplite/workspace/bizon_z050`. Przy innej lokalizacji zmień stałe
