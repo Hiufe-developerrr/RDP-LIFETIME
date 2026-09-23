@@ -1,5 +1,7 @@
-# 07 - FS25 preparation: apply modifiers, join static parts, FS-style
-# hierarchy with pivots for moving parts, collision boxes, UV atlases.
+# 07 - FS25 preparation: apply modifiers, fold attached detail meshes into
+# their moving parents, join static parts per texture atlas, FS-style
+# hierarchy, collisions, viewport clean-up (collisions hidden, small empties).
+# UVs are done by 07b_uv.py (separate MCP calls keep each step short).
 TAG_ROOT = "final"
 purge_part(TAG_ROOT)
 CC = coll("Z050_combine")
@@ -29,66 +31,91 @@ def apply_mods(objs):
             D.meshes.remove(old)
 
 
-def join(target_name, names):
-    objs = [D.objects[n] for n in names if n in D.objects]
-    if not objs:
-        return None
-    active = objs[0]
+def join(active, others):
+    objs = [active] + [o for o in others if o is not active]
     if len(objs) > 1:
         with bpy.context.temp_override(**view3d_ctx(), active_object=active, object=active,
                                        selected_objects=objs, selected_editable_objects=objs):
             bpy.ops.object.join()
-    active.name = target_name
-    active.data.name = target_name
     return active
 
 
-if bpy.context.object and bpy.context.object.mode != 'OBJECT':
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-all_mesh = [o for o in D.objects if o.type == 'MESH' and o.get("z050_part")]
-apply_mods(all_mesh)
-
-# ------------------------------------------------------------ combine joins
-body = join("bizonZ050_body", [
-    "z050_bodyLower", "z050_bodyRibs", "z050_grainTank", "z050_tankTop", "z050_radiatorGrille",
-    "z050_platform", "z050_frontAxle", "z050_rearAxleMount", "z050_hitch", "z050_railings",
-    "z050_canopyFrame", "z050_canopyRoof", "z050_seat", "z050_steeringColumn", "z050_headlightBodies",
-    "z050_lampsMisc", "z050_unloadRiser", "z050_pipeCradle", "z050_grainElevator", "z050_beltDrives",
-    "z050_exhaust", "z050_airIntake", "z050_hoses", "z050_rearKit", "z050_smvSign", "z050_decals", "ladder"])
-lights = join("bizonZ050_lights", ["z050_headlightGlass", "z050_lampsGlass", "z050_rearLights"])
-lift = join("feederLiftCylinders", ["z050_liftCylinders"])
-pipe_mesh = D.objects["pipeTube"]
-
-# header joins
-hbody = join("header420_body", ["z050h_trough", "z050h_endPlates", "z050h_cutterBar", "z050h_knifeDrive",
-                                "z050h_reelLift", "z050h_drives"])
-
-# ------------------------------------------------------------ hierarchy
-root = empty("bizonZ050", (0, 0, 0), CC, TAG_ROOT, size=1.0, kind='ARROWS')
-for n in ("bizonZ050_body", "bizonZ050_lights", "feederHouse", "feederLiftCylinders", "steeringWheel",
-          "pipe", "frontAxle", "rearAxle"):
-    ob = D.objects[n]
-    if ob.parent is None:
-        set_parent(ob, root)
-tie = D.objects.get("z050_tieRod")
-if tie:
-    tie.name = tie.data.name = "rearAxleTieRod"
-
+def join_named(name, objs):
+    if not objs:
+        return None
+    ob = join(objs[0], objs[1:])
+    ob.name = name
+    ob.data.name = name
+    return ob
 
 
 def bake_local(ob):
     """Move a static child's local offset into its mesh (identity local transform)."""
-    if ob.parent is not None and ob.matrix_basis != Matrix.Identity(4):
+    if ob.matrix_basis != Matrix.Identity(4):
         ob.data.transform(ob.matrix_basis)
         ob.matrix_basis = Matrix.Identity(4)
 
 
-for n in ("bizonZ050_body", "bizonZ050_lights", "feederLiftCylinders", "header420_body"):
+if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+    bpy.ops.object.mode_set(mode='OBJECT')
+apply_mods([o for o in D.objects if o.type == 'MESH' and o.get("z050_part")])
+
+# Zero-area faces left by the bevel on tiny cylinders get huge UV islands
+# (average_islands_scale divides by their area) and overwrite neighbours in
+# the bake: dissolve them. N-gons are triangulated (the exporter does anyway).
+for o in D.objects:
+    if o.type == 'MESH' and o.get("z050_part"):
+        bm_ = bmesh.new()
+        bm_.from_mesh(o.data)
+        bmesh.ops.dissolve_degenerate(bm_, dist=1e-6, edges=bm_.edges[:])
+        tiny = [f for f in bm_.faces if f.calc_area() < 1e-9]
+        if tiny:
+            bmesh.ops.delete(bm_, geom=tiny, context='FACES')
+        ng = [f for f in bm_.faces if len(f.verts) > 4]
+        if ng:
+            bmesh.ops.triangulate(bm_, faces=ng, quad_method='BEAUTY', ngon_method='BEAUTY')
+        bm_.to_mesh(o.data)
+        bm_.free()
+
+# 1) detail meshes that belong to moving parts (feeder house, auger, reel, reel arms)
+for ob in [o for o in D.objects if o.get("attach")]:
+    tgt = D.objects.get(ob["attach"])
+    if tgt is not None:
+        join(tgt, [ob])
+        tgt.pop("attach", None)
+
+# 2) static combine parts, grouped by texture atlas
+groups = {"body": [], "detail": [], "lights": []}
+for o in list(CC.objects):
+    if o.type == 'MESH' and o.parent is None and not o.get("keep"):
+        groups[o.get("grp", "body")].append(o)
+body = join_named("bizonZ050_body", groups["body"])
+details = join_named("bizonZ050_details", groups["detail"])
+lights = join_named("bizonZ050_lights", groups["lights"])
+lift = D.objects.get("z050_liftCylinders")
+if lift:
+    lift.name = lift.data.name = "feederLiftCylinders"
+tie = D.objects.get("z050_tieRod")
+if tie:
+    tie.name = tie.data.name = "rearAxleTieRod"
+
+# header static parts
+hroot = D.objects["header420"]
+hstatic = [o for o in CH.objects if o.type == 'MESH' and o.parent == hroot and o.name != "knife"]
+hbody = join_named("header420_body", hstatic)
+
+# 3) hierarchy
+root = empty("bizonZ050", (0, 0, 0), CC, TAG_ROOT, size=0.6, kind='ARROWS')
+for n in ("bizonZ050_body", "bizonZ050_details", "bizonZ050_lights", "feederHouse", "feederLiftCylinders",
+          "steeringWheel", "pipe", "frontAxle", "rearAxle"):
+    ob = D.objects.get(n)
+    if ob is not None and ob.parent is None:
+        set_parent(ob, root)
+for n in ("bizonZ050_body", "bizonZ050_details", "bizonZ050_lights", "feederLiftCylinders", "header420_body"):
     if n in D.objects:
         bake_local(D.objects[n])
 
-# ------------------------------------------------------------ collisions
+# 4) collisions (hidden in the viewport; flag them in the GIANTS exporter)
 
 
 def col_box(name, lo, hi, parent):
@@ -105,69 +132,46 @@ def col_box(name, lo, hi, parent):
 
 col_box("bizonZ050_collisionBody", (-HB, -0.62, 0.66), (HB, REAR_Y, REAR_TOP), root)
 col_box("bizonZ050_collisionTank", (-TANK_HW, TANK_Y0, 2.02), (TANK_HW, TANK_Y1, TANK_TOP), root)
-col_box("bizonZ050_collisionCab", (-0.93, PLAT_Y0 - 0.12, 1.83), (0.93, PLAT_Y1, CANOPY_Z + 0.02), root)
-col_box("header420_collision", (-2.20, -3.62, 0.05), (2.20, -1.70, 1.40), D.objects["header420"])
+col_box("bizonZ050_collisionCab", (-0.93, PLAT_Y0 - 0.12, 1.78), (0.93, PLAT_Y1, CANOPY_Z + 0.03), root)
+col_box("header420_collision", (-2.20, -3.62, 0.05), (2.20, -1.62, 1.40), hroot)
+CCOL.hide_render = True
+lc = bpy.context.view_layer.layer_collection.children.get("Z050_collision")
+if lc is not None:
+    lc.hide_viewport = True
 
-# ------------------------------------------------------------ naming
+# 5) unobtrusive transform groups (small plain axes instead of big circles)
+for o in D.objects:
+    if o.type == 'EMPTY' and o.users_collection and o.users_collection[0] in (CC, CH):
+        o.empty_display_type = 'PLAIN_AXES'
+        o.empty_display_size = 0.12
 for ob in D.objects:
     if ob.type == 'MESH' and ob.data.name != ob.name:
         ob.data.name = ob.name
 
-# ------------------------------------------------------------ UV atlases
+# 6) atlas assignment (used by 07b_uv / 09_bake)
 
 
-def unwrap(objs, margin=0.0015):
-    objs = [o for o in objs if o and o.type == 'MESH']
-    for o in D.objects:
-        o.select_set(False)
-    for o in objs:
-        o.select_set(True)
-        if not o.data.uv_layers:
-            o.data.uv_layers.new(name="UVMap")
-    bpy.context.view_layer.objects.active = objs[0]
-    with bpy.context.temp_override(**view3d_ctx()):
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.uv.smart_project(angle_limit=radians(66), island_margin=0.0, area_weight=0.0,
-                                 correct_aspect=True, scale_to_bounds=False)
-        bpy.ops.uv.average_islands_scale()
-        bpy.ops.uv.pack_islands(rotate=True, rotate_method='ANY', scale=True, margin_method='FRACTION',
-                                margin=margin, shape_method='CONCAVE')
-        bpy.ops.object.mode_set(mode='OBJECT')
-    for o in objs:
-        o.select_set(False)
+def atlas_of(o):
+    if o.name.startswith("tire"):
+        return "bizonZ050_tires"
+    if o.name == "bizonZ050_lights":
+        return None
+    if o.users_collection and o.users_collection[0] == CH:
+        return "header420"
+    if o.name in ("bizonZ050_body", "feederHouse", "pipeTube"):
+        return "bizonZ050"
+    return "bizonZ050_details"
 
 
-meshes_c = [o for o in D.objects if o.type == 'MESH' and o.users_collection and o.users_collection[0] == CC]
-tires = [o for o in meshes_c if o.name.startswith("tire")]
-glassy = [o for o in meshes_c if o.name == "bizonZ050_lights"]
-atlas_body = [o for o in meshes_c if o not in tires and o not in glassy]
-atlas_header = [o for o in D.objects if o.type == 'MESH' and o.users_collection and o.users_collection[0] == CH]
-unwrap(atlas_body)
-unwrap(tires)
-unwrap(atlas_header)
-unwrap(glassy)
-for o in atlas_body:
-    o["fs_atlas"] = "bizonZ050"
-for o in tires:
-    o["fs_atlas"] = "bizonZ050_tires"
-for o in atlas_header:
-    o["fs_atlas"] = "header420"
-
-# ------------------------------------------------------------ report
-dg = bpy.context.evaluated_depsgraph_get()
-
-
-def tris(objs):
-    t = 0
-    for o in objs:
-        me = o.data
-        me.calc_loop_triangles()
-        t += len(me.loop_triangles)
-    return t
-
-
-print("combine meshes:", len(meshes_c), "tris:", tris(meshes_c))
-print("header meshes:", len(atlas_header), "tris:", tris(atlas_header))
-print("combine objects:", sorted(o.name for o in meshes_c))
-print("header objects:", sorted(o.name for o in atlas_header))
+stats = {}
+for o in D.objects:
+    if o.type == 'MESH' and o.users_collection and o.users_collection[0] in (CC, CH):
+        a = atlas_of(o)
+        if a:
+            o["fs_atlas"] = a
+        o.data.calc_loop_triangles()
+        k = a or "lights"
+        stats[k] = stats.get(k, 0) + len(o.data.loop_triangles)
+print("tris per atlas:", stats, "total:", sum(stats.values()))
+print("combine objects:", sorted(o.name for o in CC.objects if o.type == 'MESH'))
+print("header objects:", sorted(o.name for o in CH.objects if o.type == 'MESH'))
