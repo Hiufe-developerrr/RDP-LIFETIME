@@ -1,10 +1,11 @@
 # 10 - FS25 package: baked atlas materials (+ switch script stored in the
-# .blend), FBX export with the baked materials, self-contained .blend save.
+# .blend), FBX export with the baked materials, .blend saved with the baked
+# look and a realistic Material Preview (scene sun + sky, helpers hidden).
 import os
 
 BASE = "/tmp/hoplite/workspace/bizon_z050"
 TEX = os.path.join(BASE, "textures")
-ATLASES = ["bizonZ050", "header420", "bizonZ050_tires"]
+ATLASES = ["bizonZ050", "bizonZ050_details", "header420", "bizonZ050_tires"]
 
 SWITCH = '''# Switch the Bizon Z050 meshes between the procedural (weathered, Cycles)
 # materials and the baked FS25 atlas materials. Run from the Text Editor.
@@ -133,7 +134,6 @@ bpy.ops.export_scene.fbx(filepath=fbx, use_selection=True, object_types={'EMPTY'
                          apply_scale_options='FBX_SCALE_ALL')
 print("fbx:", fbx, os.path.getsize(fbx))
 
-exec(compile(SWITCH.replace('MODE = "BAKED"', 'MODE = "PROCEDURAL"'), "switch", "exec"), {})
 
 # ---------------------------------------------------------------- .blend
 scn = bpy.context.scene
@@ -147,12 +147,37 @@ sky = nt.nodes.new('ShaderNodeTexSky')
 sky.sky_type = 'NISHITA'
 sky.sun_elevation = radians(42)
 sky.sun_rotation = radians(140)
+sky.sun_disc = False                      # the sun lamp provides the sun
 nt.links.new(sky.outputs['Color'], bg.inputs['Color'])
-bg.inputs['Strength'].default_value = 0.35
+bg.inputs['Strength'].default_value = 0.04       # Nishita is physically bright vs a 3.2 W/m2 sun lamp
 for im in list(D.images):
     if im.filepath and im.filepath.startswith("/opt/"):
         D.images.remove(im)
 scn.camera = D.objects.get("cam_front_left")
+if hasattr(scn, "eevee"):
+    for attr, val in (("taa_samples", 32), ("use_shadows", True), ("use_gtao", True)):
+        if hasattr(scn.eevee, attr):
+            setattr(scn.eevee, attr, val)
+eye, tgt = Vector((6.3, -6.8, 3.0)), Vector((0.25, -0.25, 1.35))
+for screen in D.screens:
+    for area in screen.areas:
+        if area.type != 'VIEW_3D':
+            continue
+        sp = area.spaces[0]
+        sp.shading.type = 'MATERIAL'
+        sp.shading.use_scene_world = True
+        sp.shading.use_scene_lights = True
+        sp.overlay.show_floor = False
+        sp.overlay.show_axis_x = False
+        sp.overlay.show_axis_y = False
+        sp.overlay.show_extras = False
+        sp.clip_end = 500.0
+        sp.lens = 40
+        r3d = sp.region_3d
+        r3d.view_perspective = 'PERSP'
+        r3d.view_location = tgt
+        r3d.view_rotation = (eye - tgt).to_track_quat('Z', 'Y')
+        r3d.view_distance = (eye - tgt).length
 for o in D.objects:
     o.select_set(False)
 os.makedirs(os.path.join(BASE, "blend"), exist_ok=True)

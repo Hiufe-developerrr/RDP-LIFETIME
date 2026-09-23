@@ -18,7 +18,18 @@ for z in (2.30, 2.75):
     cyl(bm, (PIV.x, PIV.y, z), (PIV.x, PIV.y, z + 0.025), 0.135, 24, 0)
 box(bm, (TANK_HW - 0.01, PIV.y - 0.10, 2.20), (PIV.x, PIV.y + 0.10, 2.40), 0)
 box(bm, (TANK_HW - 0.01, PIV.y - 0.06, 2.92), (PIV.x - 0.08, PIV.y + 0.06, 3.02), 0)
-make_obj("z050_unloadRiser", bm, [RED], C, TAG, bevel=0.006)
+for z in (2.30, 2.75):
+    bolt_ring(bm, (PIV.x, PIV.y, z + 0.025), (0, 0, 1), 0.124, 8, 0.0075, 0.008, mi=2)
+# bevel gearbox under the riser, input shaft, clutch lever with a rod to the platform
+box_c(bm, (PIV.x, PIV.y, 2.155), (0.20, 0.20, 0.13), 1)
+fasteners(bm, (PIV.x - 0.09, PIV.y - 0.10, 2.22), (PIV.x + 0.09, PIV.y - 0.10, 2.22), (0, -1, 0), 0.06, 'bolt', 2,
+          af=0.013, h=0.005, washer=False)
+cyl(bm, (PIV.x, PIV.y - 0.10, 2.14), (PIV.x, PIV.y - 0.24, 2.14), 0.028, 12, 2)
+flange_bearing(bm, (PIV.x, PIV.y - 0.10, 2.14), (0, -1, 0), 0.05, 1, 2)
+tube(bm, [(PIV.x + 0.10, PIV.y + 0.02, 2.16), (PIV.x + 0.16, PIV.y + 0.02, 2.30), (PIV.x + 0.14, -0.62, 2.52)],
+     0.009, 8, mi=2, round_r=0.06)
+sphere(bm, (PIV.x + 0.14, -0.625, 2.53), 0.022, 10, 5, 3)
+make_obj("z050_unloadRiser", bm, [RED, DARK, "Z050_zinc", "Z050_knob_black"], C, TAG, bevel=0.006)
 
 pipe_root = empty("pipe", tuple(PIV), C, TAG, size=0.4, kind='SINGLE_ARROW')
 bm = bmesh.new()
@@ -68,60 +79,10 @@ box(bm, (ex0, ey0 - 0.01, 0.72), (ex1, ey1 + 0.01, 0.82), 0)
 box(bm, (ex0 - 0.01, ey0 + 0.03, 1.10), (ex0, ey1 - 0.03, 1.45), 1)               # inspection door
 for z in (1.12, 1.43):
     cyl(bm, (ex0 - 0.012, ey0 + 0.05, z), (ex0 - 0.012, ey1 - 0.05, z), 0.008, 6, 1)
-make_obj("z050_grainElevator", bm, [RED, STEEL], C, TAG, bevel=0.006)
-
-# ------------------------------------------------------ belt drives (right)
-
-
-def pulley(bm, y, z, r, x, w=0.045, grooves=1, mi=0):
-    g = w / (grooves * 2 + 1)
-    xs = x - w / 2
-    prof = [(0.0, xs), (r * 0.30, xs), (r * 0.30, xs + 0.004)]
-    prof += [(r * 0.86, xs + 0.004), (r, xs)]
-    for k in range(grooves):
-        a = xs + g * (2 * k + 1)
-        prof += [(r, a), (r * 0.9, a + g * 0.5), (r, a + g)]
-    prof += [(r, x + w / 2), (r * 0.86, x + w / 2 - 0.004), (r * 0.30, x + w / 2 - 0.004),
-             (r * 0.30, x + w / 2), (0.0, x + w / 2)]
-    revolve(bm, prof, 36 if r > 0.15 else 24, center=(0, y, z), axis='X', mi=mi)
-    cyl(bm, (x - w / 2 - 0.02, y, z), (x + w / 2 + 0.02, y, z), max(0.03, r * 0.18), 14, 1)
-
-
-def belt(bm, pulleys, x, width=0.022, th=0.012):
-    pts = belt_path([(y, z, r * 0.95) for (y, z, r) in pulleys], 10)
-    path = [(x, y, z) for (y, z) in pts]
-    prof = [(-th / 2, -width / 2), (th / 2, -width / 2), (th / 2, width / 2), (-th / 2, width / 2)]
-    sweep(bm, path[:-1], prof, closed=True, mi=2, up=(1, 0, 0))
-
-
-bm = bmesh.new()
-XA, XB = -1.083, -1.028
-E, Dr = (1.80, 2.72, 0.16), (-0.40, 1.42, 0.28)
-pulley(bm, E[0], E[1], E[2], XA, grooves=2)
-pulley(bm, Dr[0], Dr[1], Dr[2], XA, grooves=2)
-belt(bm, [E, Dr], XA)
-T = (0.62, 2.12, 0.07)
-pulley(bm, T[0], T[1], T[2], XA)
-tube(bm, [(XA + 0.03, T[0], T[1]), (-0.955, T[0] + 0.25, T[1] - 0.18)], 0.018, 8, mi=1)
-D2, F = (-0.40, 1.42, 0.12), (0.62, 0.98, 0.14)
-pulley(bm, D2[0], D2[1], D2[2], XB)
-pulley(bm, F[0], F[1], F[2], XB)
-belt(bm, [D2, F], XB)
-E2, W = (1.80, 2.72, 0.10), (2.62, 2.22, 0.22)
-pulley(bm, E2[0], E2[1], E2[2], XB)
-pulley(bm, W[0], W[1], W[2], XB)
-belt(bm, [E2, W], XB)
-W2, S = (2.62, 2.22, 0.10), (3.30, 1.30, 0.16)
-pulley(bm, W2[0], W2[1], W2[2], XA)
-pulley(bm, S[0], S[1], S[2], XA)
-belt(bm, [W2, S], XA)
-# fan housing drum on the right side + belt guard over the engine pulley
-revolve(bm, [(0.0, -HB), (0.30, -HB), (0.30, -HB - 0.03), (0.0, -HB - 0.03)], 32,
-        center=(0, F[0], F[1]), axis='X', mi=0)
-guard = [(E[0] + 0.26 * cos(a), E[1] + 0.26 * sin(a)) for a in [radians(t) for t in range(-60, 181, 15)]]
-guard += [(E[0] - 0.26, E[1] - 0.12), (E[0] + 0.26 * cos(radians(-60)), E[1] - 0.20)]
-prism(bm, guard, 'X', XA - 0.05, XA - 0.044, 0)
-make_obj("z050_beltDrives", bm, [RED, STEEL, RUB], C, TAG, bevel=0.002)
+fasteners(bm, (ex0, ey0 + 0.02, 0.84), (ex0, ey0 + 0.02, 2.98), (-1, 0, 0), 0.16, 'rivet', 0)
+fasteners(bm, (ex0, ey1 - 0.02, 0.84), (ex0, ey1 - 0.02, 2.98), (-1, 0, 0), 0.16, 'rivet', 0)
+flange_bearing(bm, (ex0, (ey0 + ey1) / 2, 3.05), (-1, 0, 0), 0.045, 2, 1)
+make_obj("z050_grainElevator", bm, [RED, STEEL, "Z050_metal_dark"], C, TAG, bevel=0.006)
 
 # ------------------------------------------------------- engine bay kit
 bm = bmesh.new()
@@ -135,6 +96,11 @@ tube(bm, [(-0.60, TANK_Y1 - 0.30, mz), (-0.60, TANK_Y1 - 0.22, mz), (-0.60, TANK
 cyl(bm, (-0.60, TANK_Y1 - 0.25, 4.02), (-0.60, TANK_Y1 - 0.19, 4.03), 0.05, 14, 1)
 vs, _ = box_c(bm, (-0.60, TANK_Y1 - 0.23, 4.05), (0.11, 0.11, 0.006), 1)
 rotate_verts(bm, vs, radians(-25), 'X', (-0.60, TANK_Y1 - 0.28, 4.03))
+for yy in (ENG_Y0 + 0.45, TANK_Y1 - 0.55):
+    revolve(bm, [(0.10, yy - 0.012), (0.106, yy - 0.012), (0.106, yy + 0.012), (0.10, yy + 0.012)], 20,
+            center=(-0.60, 0, mz), axis='Y', mi=1, closed=True)
+revolve(bm, [(0.045, 3.72), (0.051, 3.72), (0.051, 3.745), (0.045, 3.745)], 16, center=(-0.60, TANK_Y1 - 0.22, 0),
+        axis='Z', mi=1, closed=True)
 make_obj("z050_exhaust", bm, [DARK, STEEL], C, TAG)
 
 bm = bmesh.new()
@@ -148,17 +114,6 @@ cyl(bm, (ax, ay, 3.95), (ax, ay, 3.99), 0.03, 12, 0)
 cyl(bm, (0.62, ENG_Y0 + 0.25, TANK_TOP + 0.03), (0.62, ENG_Y0 + 0.25, TANK_TOP + 0.10), 0.05, 16, 2)
 cyl(bm, (0.62, ENG_Y0 + 0.25, TANK_TOP + 0.10), (0.62, ENG_Y0 + 0.25, TANK_TOP + 0.13), 0.065, 16, 2)
 make_obj("z050_airIntake", bm, [DARK, "Z050_rubber_black", STEEL], C, TAG, bevel=0.003)
-
-# hydraulic hoses (feeder lift, reel) along the body front
-bm = bmesh.new()
-for s in (1, -1):
-    tube(bm, [(s * 0.25, -0.63, 1.90), (s * 0.30, -0.66, 1.30), (s * 0.40, -0.45, 0.95),
-              (s * 0.42, -0.34, 0.80)], 0.013, 8, round_r=0.12)
-tube(bm, [(0.55, -0.63, 1.95), (0.60, -0.70, 1.70), (0.63, -1.30, 1.25), (0.64, -1.62, 1.12)], 0.011, 8,
-     round_r=0.18)
-tube(bm, [(0.50, -0.63, 1.97), (0.56, -0.72, 1.72), (0.60, -1.32, 1.28), (0.60, -1.64, 1.14)], 0.011, 8,
-     round_r=0.18)
-make_obj("z050_hoses", bm, [RUB], C, TAG)
 
 # ------------------------------------------------ rear: curtain, lights, SMV
 bm = bmesh.new()
@@ -176,12 +131,20 @@ for s in (1, -1):
 box(bm, (-0.02, REAR_Y, 2.02), (0.02, REAR_Y + 0.06, 2.34), 1)
 make_obj("z050_rearKit", bm, [RED, DARK, RUB], C, TAG, bevel=0.003)
 
-bm = bmesh.new()
+lb = bmesh.new()
+lz = bmesh.new()
 for s in (1, -1):
-    box(bm, (s * 0.80 - 0.105, REAR_Y + 0.16, 1.665), (s * 0.80 - 0.005, REAR_Y + 0.17, 1.755), 0)
-    box(bm, (s * 0.80 + 0.005, REAR_Y + 0.16, 1.665), (s * 0.80 + 0.105, REAR_Y + 0.17, 1.755), 1)
-    cyl(bm, (s * 0.88, REAR_Y, 2.28), (s * 0.88, REAR_Y + 0.012, 2.28), 0.04, 16, 0)
-make_obj("z050_rearLights", bm, [LRED, ORANGE], C, TAG)
+    x = s * 0.80
+    box(lb, (x - 0.12, REAR_Y + 0.155, 1.655), (x + 0.12, REAR_Y + 0.215, 1.765), 0)            # housing
+    box(lb, (x - 0.125, REAR_Y + 0.212, 1.65), (x + 0.125, REAR_Y + 0.222, 1.77), 1)           # chrome rim
+    box(lz, (x - 0.11, REAR_Y + 0.222, 1.665), (x - 0.005, REAR_Y + 0.232, 1.755), 0)          # tail / stop
+    box(lz, (x + 0.005, REAR_Y + 0.222, 1.665), (x + 0.11, REAR_Y + 0.232, 1.755), 1)          # indicator
+    revolve_v(lb, [(0.038, 0.0), (0.045, 0.0), (0.045, 0.01)], 18, (x, REAR_Y + 0.05, 1.58), (0, 1, 0), 0)
+    revolve_v(lz, [(0.0, 0.012), (0.039, 0.009), (0.039, 0.0)], 18, (x, REAR_Y + 0.05, 1.58), (0, 1, 0), 0)
+    nut(lb, (x, REAR_Y + 0.215, 1.71), (0, 1, 0), af=0.01, h=0.004, mi=1, washer=False)
+make_obj("z050_rearLampBodies", lb, ["Z050_plastic_black", "Z050_chrome"], C, TAG)
+ob = make_obj("z050_rearLights", lz, [LRED, ORANGE], C, TAG)
+ob["grp"] = "lights"
 
 bm = bmesh.new()
 tc = Vector((0.0, REAR_Y + 0.065, 2.20))
@@ -215,6 +178,14 @@ for s, face in ((1, FACE_LEFT), (-1, FACE_RIGHT)):
 me = text_mesh("super Z050", 0.085, 0.0015)
 mesh_to_bm(bm, me, Matrix.Translation(Vector((TANK_HW + 0.0015, 0.40, 2.49))) @ FACE_LEFT, mi=1)
 D.meshes.remove(me)
-make_obj("z050_decals", bm, [WHITE, BLACK, RED], C, TAG)
+for (x, y, z, face, s_) in ((-(HB + 0.029), 2.20, 2.55, FACE_RIGHT, -1), (-(HB + 0.029), 3.95, 1.95, FACE_RIGHT, -1),
+                           (HB + 0.029, 3.95, 1.95, FACE_LEFT, 1)):
+    c = Vector((x, y, z))
+    plate(bm, [c + face @ Vector((u, v, 0)) for (u, v) in ((-0.05, -0.07), (0.05, -0.07), (0.05, 0.07), (-0.05, 0.07))],
+          0.002, (s_, 0, 0), mi=3)
+    plate(bm, [c + Vector((s_ * 0.002, 0, 0)) + face @ Vector((u, v, 0)) for (u, v) in ((-0.036, -0.02), (0.036, -0.02),
+                                                                                      (0.0, 0.045))],
+          0.001, (s_, 0, 0), mi=1)
+make_obj("z050_decals", bm, [WHITE, BLACK, RED, "Z050_decal_yellow"], C, TAG)
 
 print("details objects:", sorted(o.name for o in D.objects if o.get("z050_part") == TAG))
