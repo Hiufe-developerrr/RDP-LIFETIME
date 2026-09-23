@@ -87,6 +87,8 @@ bizonZ050                                 header420 (punkt zaczepu na przenośni
 
 ### Widok w Blenderze
 
+![Material Preview po otwarciu pliku](renders/viewport_material_preview.jpg)
+
 Plik otwiera się z **wypalonymi materiałami** w trybie *Material Preview* ze słońcem i niebem sceny.
 Wtedy w EEVEE widać wszystkie ślady zużycia, łącznie z przetarciami krawędzi, które w materiałach
 proceduralnych działają tylko w Cycles. Obiekty pomocnicze (empty, kamery, kolizje) są ukryte
